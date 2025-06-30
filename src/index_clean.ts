@@ -6,12 +6,220 @@
 
 import { DAY_TO_NUMBER, HTML_DASHBOARD, MAX_LOGS } from './constants';
 import type { WeeklyNotification, SentNotification, Env, SupabaseResponse } from './types';
-import { addLog, getExecutionLogs, clearExecutionLogs, getKSTTime, formatTime, checkDayMatch, timeToMinutes } from './lib/utils';
-import { runNotificationCheck, checkRecentlySent } from './lib/handlers';
-import { createClient } from './lib/database/supabase';
-import { sendSlackNotification } from './lib/slack';
 
 const html = HTML_DASHBOARD;
+
+// Simple Supabase client implementation
+class SimpleSupabaseClient {
+	private url: string;
+	private key: string;
+
+	constructor(url: string, key: string) {
+		this.url = url;
+		this.key = key;
+	}
+
+	from(table: string) {
+		return new SimpleSupabaseTable(this.url, this.key, table);
+	}
+}
+
+class SimpleSupabaseTable {
+	private url: string;
+	private key: string;
+	private table: string;
+	private query: any = {};
+
+	constructor(url: string, key: string, table: string) {
+		this.url = url;
+		this.key = key;
+		this.table = table;
+	}
+
+	select(columns: string = '*') {
+		this.query.select = columns;
+		return this;
+	}
+
+	eq(column: string, value: any) {
+		if (!this.query.filters) this.query.filters = [];
+		this.query.filters.push({ column, operator: 'eq', value });
+		return this;
+	}
+
+	like(column: string, pattern: string) {
+		if (!this.query.filters) this.query.filters = [];
+		this.query.filters.push({ column, operator: 'like', value: pattern });
+		return this;
+	}
+
+	gte(column: string, value: any) {
+		if (!this.query.filters) this.query.filters = [];
+		this.query.filters.push({ column, operator: 'gte', value });
+		return this;
+	}
+
+	lt(column: string, value: any) {
+		if (!this.query.filters) this.query.filters = [];
+		this.query.filters.push({ column, operator: 'lt', value });
+		return this;
+	}
+
+	limit(count: number) {
+		this.query.limit = count;
+		return this;
+	}
+
+	order(column: string, options: { ascending: boolean } = { ascending: true }) {
+		if (!this.query.order) this.query.order = [];
+		this.query.order.push({ column, ascending: options.ascending });
+		return this;
+	}
+
+	async execute(): Promise<SupabaseResponse<any>> {
+		let url = `${this.url}/rest/v1/${this.table}`;
+		const params = new URLSearchParams();
+
+		if (this.query.select) {
+			params.append('select', this.query.select);
+		}
+
+		if (this.query.filters) {
+			this.query.filters.forEach((filter: any) => {
+				params.append(filter.column, `${filter.operator}.${filter.value}`);
+			});
+		}
+
+		if (this.query.limit) {
+			params.append('limit', this.query.limit.toString());
+		}
+
+		if (this.query.order) {
+			this.query.order.forEach((orderItem: any) => {
+				params.append('order', `${orderItem.column}.${orderItem.ascending ? 'asc' : 'desc'}`);
+			});
+		}
+
+		if (params.toString()) {
+			url += '?' + params.toString();
+		}
+
+		try {
+			const response = await fetch(url, {
+				headers: {
+					'apikey': this.key,
+					'Authorization': `Bearer ${this.key}`,
+					'Content-Type': 'application/json',
+					'Prefer': 'return=representation'
+				}
+			});
+
+			if (!response.ok) {
+				const errorText = await response.text();
+				return {
+					data: null,
+					error: { message: `Supabase request failed: ${response.status} ${errorText}` }
+				};
+			}
+
+			const data = await response.json();
+			return { data: Array.isArray(data) ? data : [data], error: null };
+		} catch (e) {
+			return {
+				data: null,
+				error: { message: `Request failed: ${e instanceof Error ? e.message : 'Unknown error'}` }
+			};
+		}
+	}
+
+	async insert(values: any | any[]) {
+		const url = `${this.url}/rest/v1/${this.table}`;
+		
+		try {
+			const response = await fetch(url, {
+				method: 'POST',
+				headers: {
+					'apikey': this.key,
+					'Authorization': `Bearer ${this.key}`,
+					'Content-Type': 'application/json',
+					'Prefer': 'return=representation'
+				},
+				body: JSON.stringify(values)
+			});
+
+			if (!response.ok) {
+				const errorText = await response.text();
+				return { data: null, error: { message: `Insert failed: ${response.status} ${errorText}` } };
+			}
+
+			const data = await response.json();
+			return { data: Array.isArray(data) ? data : [data], error: null };
+		} catch (e) {
+			return {
+				data: null,
+				error: { message: `Insert failed: ${e instanceof Error ? e.message : 'Unknown error'}` }
+			};
+		}
+	}
+
+	async delete() {
+		let url = `${this.url}/rest/v1/${this.table}`;
+		const params = new URLSearchParams();
+
+		if (this.query.filters) {
+			this.query.filters.forEach((filter: any) => {
+				params.append(filter.column, `${filter.operator}.${filter.value}`);
+			});
+		}
+
+		if (params.toString()) {
+			url += '?' + params.toString();
+		}
+
+		try {
+			const response = await fetch(url, {
+				method: 'DELETE',
+				headers: {
+					'apikey': this.key,
+					'Authorization': `Bearer ${this.key}`,
+					'Content-Type': 'application/json',
+					'Prefer': 'return=representation'
+				}
+			});
+
+			if (!response.ok) {
+				const errorText = await response.text();
+				return { data: null, error: { message: `Delete failed: ${response.status} ${errorText}` } };
+			}
+
+			const data = await response.json();
+			return { data: Array.isArray(data) ? data : [data], error: null };
+		} catch (e) {
+			return {
+				data: null,
+				error: { message: `Delete failed: ${e instanceof Error ? e.message : 'Unknown error'}` }
+			};
+		}
+	}
+}
+
+// Helper function to create Supabase client
+function createClient(url: string, key: string): SimpleSupabaseClient {
+	return new SimpleSupabaseClient(url, key);
+}
+
+// Simple log storage (in-memory)
+const executionLogs: string[] = [];
+
+function addLog(message: string) {
+	const timestamp = new Date().toISOString();
+	const logEntry = `[${timestamp}] ${message}`;
+	executionLogs.unshift(logEntry);
+	if (executionLogs.length > MAX_LOGS) {
+		executionLogs.pop();
+	}
+	console.log(logEntry);
+}
 
 export default {
 	async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
@@ -163,7 +371,7 @@ export default {
 		}
 
 		if (url.pathname === '/clear-logs') {
-			clearExecutionLogs();
+			executionLogs.length = 0;
 			addLog('Logs cleared');
 			return new Response('Logs cleared', { status: 200 });
 		}
@@ -211,6 +419,210 @@ export default {
 		}
 	},
 };
+
+// Helper function to get Korean Standard Time
+function getKSTTime(): Date {
+	const now = new Date();
+	const kstOffset = 9 * 60; // 9 hours in minutes
+	return new Date(now.getTime() + kstOffset * 60 * 1000);
+}
+
+// Helper function to format time consistently
+function formatTime(date: Date): string {
+	return date.toTimeString().split(' ')[0]; // HH:MM:SS
+}
+
+// Improved day matching logic
+function checkDayMatch(dbDay: string, currentDayNumber: string, currentDayName: string): boolean {
+	const normalizedDbDay = dbDay.toString().trim();
+	const normalizedCurrentDay = currentDayNumber.toString().trim();
+
+	// Try number match first (0-6)
+	if (normalizedDbDay === normalizedCurrentDay) {
+		return true;
+	}
+
+	// Try name match (case insensitive)
+	if (normalizedDbDay.toLowerCase() === currentDayName.toLowerCase()) {
+		return true;
+	}
+
+	return false;
+}
+
+async function runNotificationCheck(env: Env): Promise<void> {
+	addLog('🔍 Starting notification check');
+
+	const supabase = createClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY);
+
+	// Use improved time handling
+	const kstTime = getKSTTime();
+	const currentDayOfWeek = kstTime.getDay().toString();
+	const currentTime = formatTime(kstTime);
+
+	console.log(`Current UTC time: ${new Date().toISOString()}`);
+	console.log(`Current KST time: ${kstTime.toISOString()}`);
+	console.log(`Checking notifications for day: ${currentDayOfWeek}, time: ${currentTime}`);
+
+	const dayNames = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+	const currentDayName = dayNames[parseInt(currentDayOfWeek)];
+	console.log(`Day name: ${currentDayName}`);
+
+	try {
+		// Fetch all active notifications
+		const { data: notifications, error } = await supabase.from('weekly_notifications').select('*').eq('is_active', true).execute();
+
+		if (error) {
+			console.error('Error fetching notifications:', error);
+			addLog(`❌ Database error: ${error.message}`);
+			return;
+		}
+
+		addLog(`📊 Found ${notifications?.length || 0} total active notifications`);
+
+		// Filter by day first
+		const todaysNotifications =
+			notifications?.filter((notification: WeeklyNotification) => {
+				return checkDayMatch(notification.day_of_week, currentDayOfWeek, currentDayName);
+			}) || [];
+
+		addLog(`📅 Found ${todaysNotifications.length} notifications for today`);
+
+		if (todaysNotifications.length === 0) {
+			addLog('❌ No notifications found for today');
+			return;
+		}
+
+		// Filter notifications by time with improved window (10 minutes instead of 1)
+		const matchingNotifications = [];
+
+		for (const notification of todaysNotifications) {
+			const notificationTime = notification.time;
+			const timeDiff = Math.abs(timeToMinutes(currentTime) - timeToMinutes(notificationTime));
+
+			addLog(`⏰ Time diff for ${notification.id}: ${timeDiff} minutes (Current: ${currentTime}, Notification: ${notificationTime})`);
+
+			// Skip if time difference is too large (15 minutes for maximum reliability with cron delays)
+			if (timeDiff > 15) {
+				addLog(`⏭️ Skipping ${notification.id} - outside 15-minute window (${timeDiff} min diff)`);
+				continue;
+			}
+
+			// Check if this notification was recently sent (using database with smart cooldown)
+			const wasRecentlySent = await checkRecentlySent(supabase, notification.id, timeDiff);
+
+			if (wasRecentlySent) {
+				addLog(`⏳ Skipping ${notification.id} - sent recently or duplicate cron`);
+				continue;
+			}
+
+			matchingNotifications.push(notification);
+		}
+
+		addLog(`🎯 Found ${matchingNotifications.length} matching notifications to send`);
+
+		// Send Slack notifications
+		for (const notification of matchingNotifications) {
+			addLog(`📤 Sending notification: ${notification.message}`);
+			await sendSlackNotification(env, notification.message, notification.id);
+		}
+	} catch (error) {
+		addLog(`❌ Error in notification check: ${error instanceof Error ? error.message : 'Unknown error'}`);
+	}
+}
+
+async function checkRecentlySent(supabase: any, notificationId: string, timeDiff: number): Promise<boolean> {
+	try {
+		// Smart cooldown based on timing accuracy
+		// If we're very close to the scheduled time (0-2 minutes), use shorter cooldown
+		// If we're further away (3-15 minutes), use longer cooldown to prevent cron overlap
+		const cooldownMinutes = timeDiff <= 2 ? 5 : 15;
+		const cooldownTime = new Date(Date.now() - cooldownMinutes * 60 * 1000).toISOString();
+
+		const { data: recentSent, error } = await supabase
+			.from('sent_notifications')
+			.select('sent_at')
+			.eq('notification_id', notificationId)
+			.gte('sent_at', cooldownTime)
+			.limit(1)
+			.execute();
+
+		if (error) {
+			console.error('Error checking sent status:', error);
+			return false; // If we can't check, proceed to send (fail-safe)
+		}
+
+		const wasSentRecently = recentSent && recentSent.length > 0;
+
+		if (wasSentRecently) {
+			const lastSentAt = recentSent[0].sent_at;
+			const minutesAgo = Math.round((Date.now() - new Date(lastSentAt).getTime()) / (60 * 1000));
+			addLog(`📍 Notification ${notificationId} was sent ${minutesAgo} minutes ago (cooldown: ${cooldownMinutes} min)`);
+		}
+
+		return wasSentRecently;
+	} catch (e) {
+		console.error('Exception checking sent status:', e);
+		return false; // If we can't check, proceed to send
+	}
+}
+
+function timeToMinutes(timeString: string): number {
+	const [hours, minutes] = timeString.split(':').map(Number);
+	return hours * 60 + minutes;
+}
+
+async function sendSlackNotification(env: Env, message: string, notificationId: string): Promise<void> {
+	addLog(`📡 Attempting to send Slack notification: ${message}`);
+
+	if (!env.SLACK_WEBHOOK_URL) {
+		addLog('❌ SLACK_WEBHOOK_URL not configured');
+		return;
+	}
+
+	try {
+		const response = await fetch(env.SLACK_WEBHOOK_URL, {
+			method: 'POST',
+			headers: {
+				'Content-Type': 'application/json',
+			},
+			body: JSON.stringify({
+				text: message,
+				username: 'Weekly Notification Bot',
+				icon_emoji: ':bell:',
+			}),
+		});
+
+		if (!response.ok) {
+			const errorText = await response.text();
+			addLog(`❌ Failed to send Slack notification: ${response.status} ${response.statusText} ${errorText}`);
+			return;
+		}
+
+		addLog(`✅ Slack notification sent successfully: ${message}`);
+
+		// Track sent notification in the database
+		const supabase = createClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY);
+
+		try {
+			const { error: insertError } = await supabase.from('sent_notifications').insert({
+				notification_id: notificationId,
+				sent_at: new Date().toISOString(),
+			});
+
+			if (insertError) {
+				console.error('Error tracking sent notification:', insertError);
+				addLog(`⚠️ Could not track sent notification in database: ${insertError.message}`);
+			} else {
+				addLog(`✅ Notification tracked in database: ${notificationId}`);
+			}
+		} catch (e) {
+			addLog(`❌ Error tracking notification: ${e instanceof Error ? e.message : 'Unknown error'}`);
+		}
+	} catch (error) {
+		addLog(`❌ Error sending Slack notification: ${error instanceof Error ? error.message : 'Unknown error'}`);
+	}
+}
 
 async function getComprehensiveDebug(env: Env): Promise<Response> {
 	console.log('Comprehensive debug triggered');
@@ -385,8 +797,7 @@ async function cleanupTestNotifications(env: Env): Promise<Response> {
 
 	try {
 		// Delete test notifications (those containing "Test notification" in the message)
-		const table = supabase.from('weekly_notifications');
-		const { data, error } = await table.like('message', '%Test notification%').delete();
+		const { data, error } = await supabase.from('weekly_notifications').like('message', '%Test notification%').delete();
 
 		if (error) {
 			return new Response(`Error cleaning up test notifications: ${error.message}`, { status: 500 });
@@ -396,8 +807,7 @@ async function cleanupTestNotifications(env: Env): Promise<Response> {
 
 		// Also clean up old sent_notifications records  
 		const oldTime = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
-		const sentTable = supabase.from('sent_notifications');
-		const { error: sentError } = await sentTable.lt('sent_at', oldTime).delete();
+		const { error: sentError } = await supabase.from('sent_notifications').lt('sent_at', oldTime).delete();
 
 		let response = `🧹 Cleanup completed!\n\n`;
 		response += `✅ Deleted ${deletedCount} test notifications\n`;
@@ -486,17 +896,16 @@ async function addThreeDebugNotifications(env: Env): Promise<Response> {
 function getLogsResponse(): Response {
 	addLog('Logs endpoint accessed');
 
-	const logs = getExecutionLogs();
-	let logsInfo = `=== WORKER EXECUTION LOGS (Last ${logs.length}) ===\n\n`;
+	let logsInfo = `=== WORKER EXECUTION LOGS (Last ${executionLogs.length}) ===\n\n`;
 
-	if (logs.length === 0) {
+	if (executionLogs.length === 0) {
 		logsInfo += 'No logs available yet. Worker may not have run or been restarted.\n\n';
 		logsInfo += 'Try:\n';
 		logsInfo += '1. Visit /test to trigger a manual check\n';
 		logsInfo += '2. Visit /create-test-now to create a test notification\n';
 		logsInfo += '3. Wait for the cron job to run (every minute)\n';
 	} else {
-		logs.forEach((log) => {
+		executionLogs.forEach((log) => {
 			logsInfo += log + '\n';
 		});
 	}
@@ -514,8 +923,7 @@ async function cleanupDebugNotifications(env: Env): Promise<Response> {
 
 	try {
 		// Delete debug notifications (those containing "Debug notification" in the message)
-		const table = supabase.from('weekly_notifications');
-		const { data, error } = await table.like('message', '%Debug notification%').delete();
+		const { data, error } = await supabase.from('weekly_notifications').like('message', '%Debug notification%').delete();
 
 		if (error) {
 			return new Response(`Error cleaning up debug notifications: ${error.message}`, { status: 500 });
