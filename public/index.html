@@ -27,6 +27,10 @@
 				<span class="description">- Check worker status and Supabase connection</span>
 			</div>
 			<div class="endpoint">
+				<a href="/heartbeat" target="_blank">/heartbeat</a>
+				<span class="description">- Heartbeat check + trigger notification check (for external monitoring)</span>
+			</div>
+			<div class="endpoint">
 				<a href="/time-debug" target="_blank">/time-debug</a>
 				<span class="description">- View current time, day matching, and notification analysis</span>
 			</div>
@@ -52,19 +56,25 @@
 			</div>
 			<div class="endpoint">
 				<a href="/create-test-now" target="_blank">/create-test-now</a>
-				<span class="description">- Create test notification for current time (then wait for cron)</span>
+				<span class="description">- Create 5 test notifications to validate 15-minute window behavior</span>
+			</div>
+			<div class="endpoint">
+				<a href="/cleanup-test" target="_blank">/cleanup-test</a>
+				<span class="description">- Remove all test notifications and cleanup old tracking data</span>
 			</div>
 		</div>
 
 		<div class="endpoint-group">
 			<h2>⚡ Quick Actions</h2>
 			<button onclick="fetchEndpoint('/status')">Check Status</button>
+			<button onclick="fetchEndpoint('/heartbeat')">Heartbeat Test</button>
 			<button onclick="fetchEndpoint('/time-debug')">Debug Time</button>
 			<button onclick="fetchEndpoint('/debug')">Full Debug</button>
 			<button onclick="fetchEndpoint('/logs')">View Logs</button>
 			<button onclick="fetchEndpoint('/test')">Test Notifications</button>
 			<button onclick="fetchEndpoint('/force-test')">Force Send</button>
-			<button onclick="fetchEndpoint('/create-test-now')">Create Test Now</button>
+			<button onclick="fetchEndpoint('/create-test-now')">Create 15-Min Tests</button>
+			<button onclick="fetchEndpoint('/cleanup-test')">Cleanup Tests</button>
 			<button onclick="fetchEndpoint('/clear-logs')">Clear Logs</button>
 		</div>
 

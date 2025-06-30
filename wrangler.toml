@@ -3,7 +3,11 @@ main = "src/index.ts"
 compatibility_date = "2024-01-01"
 
 [triggers]
-crons = ["* * * * *"] # Run every minute
+crons = [
+  "* * * * *",      # Every minute (primary check)
+  "*/2 * * * *",    # Every 2 minutes (backup)
+  "*/5 * * * *"     # Every 5 minutes (safety net)
+]
 
 [vars]
 SUPABASE_URL = "SUPABASE_URL"

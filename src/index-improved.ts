@@ -149,7 +149,7 @@ export default {
           debugInfo += `  Message: ${notification.message}\n`;
           debugInfo += `  Day: ${notification.day_of_week} (${dayMatch ? '✅' : '❌'})\n`;
           debugInfo += `  Time: ${notification.time} (diff: ${timeDiff} min)\n`;
-          debugInfo += `  Would send: ${dayMatch && timeDiff <= 3}\n\n`;
+          debugInfo += `  Would send: ${dayMatch && timeDiff <= 10}\n\n`;
         });
         
         return new Response(debugInfo, { 
@@ -167,6 +167,10 @@ export default {
     
     if (url.pathname === '/create-test-now') {
       return await createTestNotification(env);
+    }
+    
+    if (url.pathname === '/cleanup-test') {
+      return await cleanupTestNotifications(env);
     }
     
     if (url.pathname === '/logs') {
@@ -263,7 +267,7 @@ async function runNotificationCheck(env: Env): Promise<void> {
       return;
     }
     
-    // Filter notifications by time with improved window (3 minutes instead of 1)
+    // Filter notifications by time with improved window (10 minutes instead of 1)
     const matchingNotifications = [];
     
     for (const notification of todaysNotifications) {
@@ -274,8 +278,8 @@ async function runNotificationCheck(env: Env): Promise<void> {
       
       addLog(`⏰ Time diff for ${notification.id}: ${timeDiff} minutes (Current: ${currentTime}, Notification: ${notificationTime})`);
       
-      // Skip if time difference is too large (3 minutes for better reliability)
-      if (timeDiff > 3) {
+      // Skip if time difference is too large (10 minutes for better reliability)
+      if (timeDiff > 10) {
         continue;
       }
       
@@ -305,13 +309,13 @@ async function runNotificationCheck(env: Env): Promise<void> {
 
 async function checkRecentlySent(supabase: any, notificationId: string): Promise<boolean> {
   try {
-    const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000).toISOString();
+    const tenMinutesAgo = new Date(Date.now() - 10 * 60 * 1000).toISOString();
     
     const { data: recentSent, error } = await supabase
       .from('sent_notifications')
       .select('sent_at')
       .eq('notification_id', notificationId)
-      .gte('sent_at', fiveMinutesAgo)
+      .gte('sent_at', tenMinutesAgo)
       .limit(1);
     
     if (error) {
@@ -441,12 +445,12 @@ async function getComprehensiveDebug(env: Env): Promise<Response> {
           timeToMinutes(currentTime) - timeToMinutes(notification.time)
         );
         const dayMatch = checkDayMatch(notification.day_of_week, currentDayOfWeek, currentDayName);
-        const wouldSend = notification.is_active && dayMatch && timeDiff <= 3;
+        const wouldSend = notification.is_active && dayMatch && timeDiff <= 10;
         
         debugInfo += `\n${index + 1}. ID: ${notification.id}\n`;
         debugInfo += `   Message: "${notification.message}"\n`;
         debugInfo += `   Day: ${notification.day_of_week} ${dayMatch ? '✅' : '❌'}\n`;
-        debugInfo += `   Time: ${notification.time} (diff: ${timeDiff}min) ${timeDiff <= 3 ? '✅' : '❌'}\n`;
+        debugInfo += `   Time: ${notification.time} (diff: ${timeDiff}min) ${timeDiff <= 10 ? '✅' : '❌'}\n`;
         debugInfo += `   Active: ${notification.is_active ? '✅' : '❌'}\n`;
         debugInfo += `   Would Send: ${wouldSend ? '✅ YES' : '❌ NO'}\n`;
       });
@@ -463,7 +467,7 @@ async function getComprehensiveDebug(env: Env): Promise<Response> {
 }
 
 async function createTestNotification(env: Env): Promise<Response> {
-  console.log('Creating test notification for current time');
+  console.log('Creating test notifications optimized for 10-minute window');
   const supabase = createClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY);
   
   const kstTime = getKSTTime();
@@ -471,22 +475,116 @@ async function createTestNotification(env: Env): Promise<Response> {
   const currentTime = formatTime(kstTime).substring(0, 8); // HH:MM:SS
   
   try {
+    // Create multiple test notifications at strategic times for 10-minute window testing
+    const testNotifications = [];
+    
+    // 1. Notification for current time (should trigger immediately)
+    testNotifications.push({
+      message: `🔔 Test notification - Current time (${currentTime})`,
+      day_of_week: currentDayOfWeek,
+      time: currentTime,
+      is_active: true
+    });
+    
+    // 2. Notification 5 minutes ago (should trigger within window)
+    const fiveMinutesAgo = new Date(kstTime.getTime() - 5 * 60 * 1000);
+    const fiveMinutesAgoTime = formatTime(fiveMinutesAgo).substring(0, 8);
+    testNotifications.push({
+      message: `🕐 Test notification - 5 min ago (${fiveMinutesAgoTime})`,
+      day_of_week: currentDayOfWeek,
+      time: fiveMinutesAgoTime,
+      is_active: true
+    });
+    
+    // 3. Notification 2 minutes from now (should trigger within window)
+    const twoMinutesLater = new Date(kstTime.getTime() + 2 * 60 * 1000);
+    const twoMinutesLaterTime = formatTime(twoMinutesLater).substring(0, 8);
+    testNotifications.push({
+      message: `🕕 Test notification - 2 min future (${twoMinutesLaterTime})`,
+      day_of_week: currentDayOfWeek,
+      time: twoMinutesLaterTime,
+      is_active: true
+    });
+    
+    // 4. Notification 15 minutes from now (should NOT trigger - outside window)
+    const fifteenMinutesLater = new Date(kstTime.getTime() + 15 * 60 * 1000);
+    const fifteenMinutesLaterTime = formatTime(fifteenMinutesLater).substring(0, 8);
+    testNotifications.push({
+      message: `⏰ Test notification - 15 min future (${fifteenMinutesLaterTime}) - Should NOT send`,
+      day_of_week: currentDayOfWeek,
+      time: fifteenMinutesLaterTime,
+      is_active: true
+    });
+    
+    // Insert all test notifications
     const { data, error } = await supabase
       .from('weekly_notifications')
-      .insert({
-        message: `Test notification created at ${currentTime}`,
-        day_of_week: currentDayOfWeek,
-        time: currentTime,
-        is_active: true
-      })
-      .select()
-      .single();
+      .insert(testNotifications)
+      .select();
       
     if (error) {
-      return new Response(`Error creating test notification: ${error.message}`, { status: 500 });
+      return new Response(`Error creating test notifications: ${error.message}`, { status: 500 });
     }
     
-    return new Response(`Test notification created! ID: ${data.id}, Time: ${currentTime}, Day: ${currentDayOfWeek}`, { status: 200 });
+    let response = `✅ Created ${data.length} test notifications for 10-minute window testing:\n\n`;
+    response += `📅 Day: ${currentDayOfWeek} (${['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][parseInt(currentDayOfWeek)]})\n`;
+    response += `🕐 Current KST Time: ${currentTime}\n\n`;
+    
+    response += `📋 Test Notifications Created:\n`;
+    data.forEach((notification: any, index: number) => {
+      const timeDiff = Math.abs(
+        timeToMinutes(currentTime) - timeToMinutes(notification.time)
+      );
+      const shouldTrigger = timeDiff <= 10;
+      
+      response += `${index + 1}. ${notification.message}\n`;
+      response += `   ID: ${notification.id}\n`;
+      response += `   Time: ${notification.time} (${timeDiff} min diff)\n`;
+      response += `   Expected: ${shouldTrigger ? '✅ SHOULD SEND' : '❌ Should NOT send'}\n\n`;
+    });
+    
+    response += `🧪 Test Instructions:\n`;
+    response += `1. Visit /test to manually trigger notification check\n`;
+    response += `2. Check /logs to see which notifications were sent\n`;
+    response += `3. Wait for cron job to run automatically\n`;
+    response += `4. Expected: 3 notifications should send, 1 should not\n`;
+    
+    return new Response(response, { status: 200 });
+  } catch (e) {
+    return new Response(`Error: ${e instanceof Error ? e.message : 'Unknown'}`, { status: 500 });
+  }
+}
+
+async function cleanupTestNotifications(env: Env): Promise<Response> {
+  console.log('Cleaning up old test notifications');
+  const supabase = createClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY);
+  
+  try {
+    // Delete test notifications (those containing "Test notification" in the message)
+    const { data, error } = await supabase
+      .from('weekly_notifications')
+      .delete()
+      .like('message', '%Test notification%')
+      .select();
+      
+    if (error) {
+      return new Response(`Error cleaning up test notifications: ${error.message}`, { status: 500 });
+    }
+    
+    const deletedCount = data?.length || 0;
+    
+    // Also clean up old sent_notifications records
+    const { error: sentError } = await supabase
+      .from('sent_notifications')
+      .delete()
+      .lt('sent_at', new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()); // Older than 24 hours
+    
+    let response = `🧹 Cleanup completed!\n\n`;
+    response += `✅ Deleted ${deletedCount} test notifications\n`;
+    response += `✅ Cleaned up old sent notification records\n\n`;
+    response += `Now you can create fresh test notifications with /create-test-now`;
+    
+    return new Response(response, { status: 200 });
   } catch (e) {
     return new Response(`Error: ${e instanceof Error ? e.message : 'Unknown'}`, { status: 500 });
   }
