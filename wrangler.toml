@@ -1,0 +1,13 @@
+name = "swab-worker"
+main = "src/index.ts"
+compatibility_date = "2024-01-01"
+
+[triggers]
+crons = ["* * * * *"] # Run every minute
+
+[vars]
+SUPABASE_URL = "SUPABASE_URL"
+
+[env.production.secrets]
+SUPABASE_SERVICE_ROLE_KEY = "SUPABASE_SERVICE_ROLE_KEY"
+SLACK_WEBHOOK_URL = "SLACK_WEBHOOK_URL"

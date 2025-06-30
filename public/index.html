@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="UTF-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+		<title>Slack Weekly Notification Worker</title>
+		<style>
+			body { font-family: Arial, sans-serif; margin: 20px; }
+			.endpoint-group { margin: 20px 0; padding: 15px; border: 1px solid #ddd; border-radius: 5px; }
+			.endpoint { margin: 10px 0; }
+			.endpoint a { text-decoration: none; color: #0066cc; font-weight: bold; }
+			.endpoint a:hover { text-decoration: underline; }
+			.description { color: #666; margin-left: 10px; }
+			button { padding: 10px 20px; margin: 5px; background: #0066cc; color: white; border: none; border-radius: 3px; cursor: pointer; }
+			button:hover { background: #0052a3; }
+			.output { margin: 10px 0; padding: 10px; background: #f5f5f5; border-radius: 3px; white-space: pre-wrap; font-family: monospace; }
+		</style>
+	</head>
+	<body>
+		<h1>Slack Weekly Notification Worker</h1>
+		<p>This Cloudflare Worker sends weekly notifications from Supabase to Slack.</p>
+		
+		<div class="endpoint-group">
+			<h2>🔍 Debug Endpoints</h2>
+			<div class="endpoint">
+				<a href="/status" target="_blank">/status</a>
+				<span class="description">- Check worker status and Supabase connection</span>
+			</div>
+			<div class="endpoint">
+				<a href="/time-debug" target="_blank">/time-debug</a>
+				<span class="description">- View current time, day matching, and notification analysis</span>
+			</div>
+			<div class="endpoint">
+				<a href="/debug" target="_blank">/debug</a>
+				<span class="description">- Comprehensive system debug (all information)</span>
+			</div>
+			<div class="endpoint">
+				<a href="/logs" target="_blank">/logs</a>
+				<span class="description">- View recent worker execution logs</span>
+			</div>
+		</div>
+
+		<div class="endpoint-group">
+			<h2>🧪 Test Endpoints</h2>
+			<div class="endpoint">
+				<a href="/test" target="_blank">/test</a>
+				<span class="description">- Run full notification check (respects time and cooldown)</span>
+			</div>
+			<div class="endpoint">
+				<a href="/force-test" target="_blank">/force-test</a>
+				<span class="description">- Force send first active notification (ignores time and cooldown)</span>
+			</div>
+			<div class="endpoint">
+				<a href="/create-test-now" target="_blank">/create-test-now</a>
+				<span class="description">- Create test notification for current time (then wait for cron)</span>
+			</div>
+		</div>
+
+		<div class="endpoint-group">
+			<h2>⚡ Quick Actions</h2>
+			<button onclick="fetchEndpoint('/status')">Check Status</button>
+			<button onclick="fetchEndpoint('/time-debug')">Debug Time</button>
+			<button onclick="fetchEndpoint('/debug')">Full Debug</button>
+			<button onclick="fetchEndpoint('/logs')">View Logs</button>
+			<button onclick="fetchEndpoint('/test')">Test Notifications</button>
+			<button onclick="fetchEndpoint('/force-test')">Force Send</button>
+			<button onclick="fetchEndpoint('/create-test-now')">Create Test Now</button>
+			<button onclick="fetchEndpoint('/clear-logs')">Clear Logs</button>
+		</div>
+
+		<div class="endpoint-group">
+			<h2>📊 Output</h2>
+			<div id="output" class="output">Click any button above to see results...</div>
+		</div>
+
+		<div class="endpoint-group">
+			<h2>ℹ️ How It Works</h2>
+			<ul>
+				<li><strong>Scheduled:</strong> Worker runs every minute via cron trigger</li>
+				<li><strong>Time Zone:</strong> Converts UTC to Korean Standard Time (KST = UTC+9)</li>
+				<li><strong>Day Format:</strong> Sunday=0, Monday=1, Tuesday=2, etc.</li>
+				<li><strong>Time Window:</strong> Notifications trigger within 1 minute of scheduled time</li>
+				<li><strong>Cooldown:</strong> Same notification won't send twice within 5 minutes</li>
+			</ul>
+		</div>
+
+		<script>
+			async function fetchEndpoint(endpoint) {
+				const output = document.getElementById('output');
+				output.textContent = 'Loading...';
+				
+				try {
+					const response = await fetch(endpoint);
+					const text = await response.text();
+					
+					let result = `🌐 ${endpoint}\n`;
+					result += `📋 Status: ${response.status} ${response.statusText}\n`;
+					result += `⏰ Time: ${new Date().toLocaleString()}\n\n`;
+					result += `📄 Response:\n${text}`;
+					
+					output.textContent = result;
+				} catch (error) {
+					output.textContent = `❌ Error fetching ${endpoint}:\n${error.message}`;
+				}
+			}
+
+			// Auto-refresh status every 30 seconds
+			setInterval(() => {
+				fetchEndpoint('/status');
+			}, 30000);
+
+			// Load initial status
+			fetchEndpoint('/status');
+		</script>
+	</body>
+</html>
