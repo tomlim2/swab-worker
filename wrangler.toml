@@ -1,17 +1,16 @@
-name = "swab-worker"
+name = "weekly-slack-bot"
 main = "src/index.ts"
 compatibility_date = "2024-01-01"
 
 [triggers]
 crons = [
-  "* * * * *",      # Every minute (primary check)
-  "*/2 * * * *",    # Every 2 minutes (backup)
-  "*/5 * * * *"     # Every 5 minutes (safety net)
+  "* * * * *"
 ]
 
+# Environment variables
 [vars]
-SUPABASE_URL = "SUPABASE_URL"
+SUPABASE_URL = "https://buiqdlquecbemsjznpft.supabase.co"
 
-[env.production.secrets]
-SUPABASE_SERVICE_ROLE_KEY = "SUPABASE_SERVICE_ROLE_KEY"
-SLACK_WEBHOOK_URL = "SLACK_WEBHOOK_URL"
+# Secrets (these are set via wrangler secret put command)
+# SUPABASE_SERVICE_ROLE_KEY = set via: wrangler secret put SUPABASE_SERVICE_ROLE_KEY
+# SLACK_WEBHOOK_URL = set via: wrangler secret put SLACK_WEBHOOK_URL
