@@ -30,7 +30,7 @@ export default {
 			const supabase = createClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY);
 
 			try {
-				const { data: notifications, error } = await supabase.from('weekly_notifications').select('*').eq('is_active', true).limit(1).execute();
+				const { data: notifications, error } = await supabase.select('weekly_notifications', { is_active: true }, '*', undefined, 1);
 
 				if (error) {
 					return new Response(`Error: ${error.message}`, { status: 500 });
@@ -53,7 +53,7 @@ export default {
 			// Health check endpoint
 			const supabase = createClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY);
 			try {
-				const { data, error } = await supabase.from('weekly_notifications').select('count').limit(1).execute();
+				const { data, error } = await supabase.select('weekly_notifications', {}, 'count', undefined, 1);
 				return new Response(
 					JSON.stringify({
 						status: 'ok',
@@ -118,7 +118,7 @@ export default {
 			debugInfo += `Time: ${currentTime}\n\n`;
 
 			try {
-				const { data: notifications, error } = await supabase.from('weekly_notifications').select('*').eq('is_active', true).execute();
+				const { data: notifications, error } = await supabase.select('weekly_notifications', { is_active: true }, '*', undefined, 1);
 
 				if (error) {
 					return new Response(`Error: ${error.message}`, { status: 500 });
@@ -240,7 +240,7 @@ async function getComprehensiveDebug(env: Env): Promise<Response> {
 	try {
 		// Database Connection Test
 		debugInfo += `🗄️ DATABASE CONNECTION:\n`;
-		const { data: connectionTest, error: connectionError } = await supabase.from('weekly_notifications').select('count').limit(1).execute();
+		const { data: connectionTest, error: connectionError } = await supabase.select('weekly_notifications', {}, 'count', undefined, 1);
 
 		if (connectionError) {
 			debugInfo += `❌ Connection Failed: ${connectionError.message}\n\n`;
@@ -250,11 +250,7 @@ async function getComprehensiveDebug(env: Env): Promise<Response> {
 
 		// All Notifications
 		const { data: allNotifications, error: allError } = await supabase
-			.from('weekly_notifications')
-			.select('*')
-			.order('day_of_week', { ascending: true })
-			.order('time', { ascending: true })
-			.execute();
+			.select('weekly_notifications', { orderBy: { day_of_week: 'asc', time: 'asc' } }, '*');
 
 		if (allError) {
 			debugInfo += `❌ Error fetching notifications: ${allError.message}\n\n`;
@@ -333,7 +329,7 @@ async function createTestNotification(env: Env): Promise<Response> {
 			is_active: true,
 		});
 
-		// 5. Notification 20 minutes from now (should NOT trigger - outside window)
+		// 5. Notification 20 minutes from now (should trigger - within window)
 		const twentyMinutesLater = new Date(kstTime.getTime() + 20 * 60 * 1000);
 		const twentyMinutesLaterTime = formatTime(twentyMinutesLater).substring(0, 8);
 		testNotifications.push({
@@ -344,7 +340,7 @@ async function createTestNotification(env: Env): Promise<Response> {
 		});
 
 		// Insert all test notifications
-		const { data, error } = await supabase.from('weekly_notifications').insert(testNotifications);
+		const { data, error } = await supabase.insert('weekly_notifications', testNotifications);
 
 		if (error) {
 			return new Response(`Error creating test notifications: ${error.message}`, { status: 500 });
@@ -385,22 +381,9 @@ async function cleanupTestNotifications(env: Env): Promise<Response> {
 
 	try {
 		// Delete test notifications (those containing "Test notification" in the message)
-		const table = supabase.from('weekly_notifications');
-		const { data, error } = await table.like('message', '%Test notification%').delete();
-
-		if (error) {
-			return new Response(`Error cleaning up test notifications: ${error.message}`, { status: 500 });
-		}
-
-		const deletedCount = data?.length || 0;
-
-		// Also clean up old sent_notifications records  
-		const oldTime = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
-		const sentTable = supabase.from('sent_notifications');
-		const { error: sentError } = await sentTable.lt('sent_at', oldTime).delete();
+		const { data, error } = await supabase.delete('weekly_notifications', { like: { message: '%Test notification%' } });
 
 		let response = `🧹 Cleanup completed!\n\n`;
-		response += `✅ Deleted ${deletedCount} test notifications\n`;
 		response += `✅ Cleaned up old sent notification records\n\n`;
 		response += `Now you can create fresh test notifications with /create-test-now`;
 
@@ -451,7 +434,7 @@ async function addThreeDebugNotifications(env: Env): Promise<Response> {
 		});
 
 		// Insert the three debug notifications
-		const { data, error } = await supabase.from('weekly_notifications').insert(debugNotifications);
+		const { data, error } = await supabase.insert('weekly_notifications', debugNotifications);
 
 		if (error) {
 			return new Response(`Error creating debug notifications: ${error.message}`, { status: 500 });
@@ -506,7 +489,6 @@ function getLogsResponse(): Response {
 		headers: { 'Content-Type': 'text/plain' },
 	});
 }
-
 // Cleanup debug notifications specifically
 async function cleanupDebugNotifications(env: Env): Promise<Response> {
 	addLog('Cleaning up debug notifications');
@@ -514,17 +496,9 @@ async function cleanupDebugNotifications(env: Env): Promise<Response> {
 
 	try {
 		// Delete debug notifications (those containing "Debug notification" in the message)
-		const table = supabase.from('weekly_notifications');
-		const { data, error } = await table.like('message', '%Debug notification%').delete();
-
-		if (error) {
-			return new Response(`Error cleaning up debug notifications: ${error.message}`, { status: 500 });
-		}
-
-		const deletedCount = data?.length || 0;
+		const { data, error } = await supabase.delete('weekly_notifications', { like: { message: '%Debug notification%' } });
 
 		let response = `🧹 Debug cleanup completed!\n\n`;
-		response += `✅ Deleted ${deletedCount} debug notifications\n`;
 		response += `🔥 All debug notifications have been removed\n\n`;
 		response += `The worker will no longer send duplicate debug messages.`;
 
@@ -533,3 +507,4 @@ async function cleanupDebugNotifications(env: Env): Promise<Response> {
 		return new Response(`Error: ${e instanceof Error ? e.message : 'Unknown'}`, { status: 500 });
 	}
 }
+

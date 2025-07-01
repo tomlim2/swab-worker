@@ -42,8 +42,10 @@ export async function sendSlackNotification(env: Env, message: string, notificat
 		const supabase = createClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY);
 
 		try {
-			const { error: insertError } = await supabase.from('sent_notifications').insert({
+			const { error: insertError } = await supabase.insert('sent_notifications', {
 				notification_id: notificationId,
+				message,
+				time: new Date().toTimeString().split(' ')[0],
 				sent_at: new Date().toISOString(),
 			});
 

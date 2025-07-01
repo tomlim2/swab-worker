@@ -29,8 +29,8 @@ export async function runNotificationCheck(env: Env): Promise<void> {
 	console.log(`Day name: ${currentDayName}`);
 
 	try {
-		// Fetch all active notifications
-		const { data: notifications, error } = await supabase.from('weekly_notifications').select('*').eq('is_active', true).execute();
+		// Fetch all active notifications that have not been sent this week
+		const { data: notifications, error } = await supabase.select('weekly_notifications', { is_active: true, sent_this_week: false });
 
 		if (error) {
 			console.error('Error fetching notifications:', error);
@@ -53,7 +53,7 @@ export async function runNotificationCheck(env: Env): Promise<void> {
 			return;
 		}
 
-		// Filter notifications by time with improved window (15 minutes instead of 1)
+		// Filter notifications by time with improved window (10 minutes)
 		const matchingNotifications = [];
 
 		for (const notification of todaysNotifications) {
@@ -62,17 +62,9 @@ export async function runNotificationCheck(env: Env): Promise<void> {
 
 			addLog(`⏰ Time diff for ${notification.id}: ${timeDiff} minutes (Current: ${currentTime}, Notification: ${notificationTime})`);
 
-			// Skip if time difference is too large (15 minutes for maximum reliability with cron delays)
-			if (timeDiff > 15) {
-				addLog(`⏭️ Skipping ${notification.id} - outside 15-minute window (${timeDiff} min diff)`);
-				continue;
-			}
-
-			// Check if this notification was recently sent (using database with smart cooldown)
-			const wasRecentlySent = await checkRecentlySent(supabase, notification.id, timeDiff);
-
-			if (wasRecentlySent) {
-				addLog(`⏳ Skipping ${notification.id} - sent recently or duplicate cron`);
+			// Only send if within a 10-minute window
+			if (timeDiff > 10) {
+				addLog(`⏭️ Skipping ${notification.id} - outside 10-minute window (${timeDiff} min diff)`);
 				continue;
 			}
 
@@ -81,10 +73,12 @@ export async function runNotificationCheck(env: Env): Promise<void> {
 
 		addLog(`🎯 Found ${matchingNotifications.length} matching notifications to send`);
 
-		// Send Slack notifications
+		// Send Slack notifications and set sent_this_week to true
 		for (const notification of matchingNotifications) {
 			try {
 				await sendSlackNotification(env, notification.message, notification.id);
+				await supabase.update('weekly_notifications', { id: notification.id }, { sent_this_week: true });
+				addLog(`✅ Marked notification ${notification.id} as sent_this_week=true`);
 			} catch (error) {
 				addLog(`❌ Failed to send notification ${notification.id}: ${error instanceof Error ? error.message : 'Unknown error'}`);
 			}
@@ -107,12 +101,15 @@ export async function checkRecentlySent(supabase: any, notificationId: string, t
 		const cooldownTime = new Date(Date.now() - cooldownMinutes * 60 * 1000).toISOString();
 
 		const { data: recentSent, error } = await supabase
-			.from('sent_notifications')
-			.select('sent_at')
-			.eq('notification_id', notificationId)
-			.gte('sent_at', cooldownTime)
-			.limit(1)
-			.execute();
+			.select('sent_notifications', {
+				filter: {
+					notification_id: notificationId,
+					sent_at: {
+						_gte: cooldownTime
+					}
+				},
+				limit: 1
+			});
 
 		if (error) {
 			console.error('Error checking sent status:', error);
@@ -131,5 +128,42 @@ export async function checkRecentlySent(supabase: any, notificationId: string, t
 	} catch (e) {
 		console.error('Exception checking sent status:', e);
 		return false; // If we can't check, proceed to send
+	}
+}
+
+async function checkRecentlySentWeekly(supabase: any, message: string, time: string): Promise<boolean> {
+	try {
+		const cooldownMinutes = 10000;
+		const cooldownTime = new Date(Date.now() - cooldownMinutes * 60 * 1000).toISOString();
+		const { data: recentSent, error } = await supabase
+			.select('sent_notifications', {
+				filter: {
+					message: message,
+					time: time,
+					sent_at: {
+						_gte: cooldownTime
+					}
+				},
+				limit: 1
+			});
+		if (error) {
+			console.error('Error checking sent status:', error);
+			return false;
+		}
+		return recentSent && recentSent.length > 0;
+	} catch (e) {
+		console.error('Exception checking sent status:', e);
+		return false;
+	}
+}
+
+// Add reset logic to be called in the scheduled worker
+export async function resetSentThisWeek(env: Env): Promise<void> {
+	const supabase = createClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY);
+	try {
+		await supabase.update('weekly_notifications', {}, { sent_this_week: false });
+		addLog('🔄 Reset sent_this_week for all notifications');
+	} catch (error) {
+		addLog(`❌ Failed to reset sent_this_week: ${error instanceof Error ? error.message : 'Unknown error'}`);
 	}
 }
