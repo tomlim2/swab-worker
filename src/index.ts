@@ -3,11 +3,10 @@
  * Self-contained implementation with modular structure
  * Handles scheduled Slack notifications with Korean timezone support
  */
-
 import { DAY_TO_NUMBER, HTML_DASHBOARD, MAX_LOGS } from './constants';
 import type { WeeklyNotification, SentNotification, Env, SupabaseResponse } from './types';
 import { addLog, getExecutionLogs, clearExecutionLogs, getKSTTime, formatTime, checkDayMatch, timeToMinutes } from './lib/utils';
-import { runNotificationCheck, checkRecentlySent } from './lib/handlers';
+import { runNotificationCheck, checkRecentlySent, resetSentThisWeek } from './lib/handlers';
 import { createClient } from './lib/database/supabase';
 import { sendSlackNotification } from './lib/slack';
 
@@ -191,6 +190,21 @@ export default {
 		addLog(`🕐 Scheduled event triggered at ${cronTime}`);
 		addLog(`📅 Cron string: ${event.cron}`);
 		addLog(`⏰ Scheduled time: ${new Date(event.scheduledTime).toISOString()}`);
+
+		// Check if it's Sunday at midnight KST for weekly reset
+		const kstTime = getKSTTime();
+		const isSunday = kstTime.getDay() === 0; // 0 = Sunday
+		const isMidnight = kstTime.getHours() === 0 && kstTime.getMinutes() < 5; // Within 5 minutes of midnight
+
+		if (isSunday && isMidnight) {
+			addLog('🔄 Sunday midnight detected - resetting sent_this_week flags');
+			try {
+				await resetSentThisWeek(env);
+				addLog('✅ Weekly reset completed successfully');
+			} catch (error) {
+				addLog(`❌ Weekly reset failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+			}
+		}
 
 		// Add some resilience for timing issues
 		try {
