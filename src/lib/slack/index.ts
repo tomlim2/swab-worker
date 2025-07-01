@@ -2,14 +2,18 @@
  * Slack notification utilities
  */
 
-import type { Env } from '../../types';
+import type { Env, WeeklyNotification } from '../../types';
 import { addLog } from '../utils';
 import { createClient } from '../database/supabase';
 
 /**
  * Send a Slack notification via webhook and track it in the database
  */
-export async function sendSlackNotification(env: Env, message: string, notificationId: string): Promise<void> {
+export async function sendSlackNotification(env: Env, notification: WeeklyNotification): Promise<void> {
+	let message = notification.message;
+	if (message.includes('[branch_version]')) {
+		message = message.replace(/\[branch_version\]/g, notification.branch_version || '');
+	}
 	addLog(`📡 Attempting to send Slack notification: ${message}`);
 
 	if (!env.SLACK_WEBHOOK_URL) {
@@ -43,7 +47,7 @@ export async function sendSlackNotification(env: Env, message: string, notificat
 
 		try {
 			const { error: insertError } = await supabase.insert('sent_notifications', {
-				notification_id: notificationId,
+				notification_id: notification.id,
 				message,
 				time: new Date().toTimeString().split(' ')[0],
 				sent_at: new Date().toISOString(),
@@ -53,7 +57,7 @@ export async function sendSlackNotification(env: Env, message: string, notificat
 				console.error('Error tracking sent notification:', insertError);
 				addLog(`⚠️ Could not track sent notification in database: ${insertError.message}`);
 			} else {
-				addLog(`✅ Notification tracked in database: ${notificationId}`);
+				addLog(`✅ Notification tracked in database: ${notification.id}`);
 			}
 		} catch (e) {
 			addLog(`❌ Error tracking notification: ${e instanceof Error ? e.message : 'Unknown error'}`);

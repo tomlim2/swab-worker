@@ -38,7 +38,7 @@ export default {
 				if (notifications && notifications.length > 0) {
 					const notification = notifications[0];
 					console.log(`Force sending: ${notification.message}`);
-					await sendSlackNotification(env, notification.message, notification.id);
+					await sendSlackNotification(env, notification);
 					return new Response(`Force sent: ${notification.message}`, { status: 200 });
 				} else {
 					return new Response('No active notifications found', { status: 404 });

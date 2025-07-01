@@ -76,7 +76,7 @@ export async function runNotificationCheck(env: Env): Promise<void> {
 		// Send Slack notifications and set sent_this_week to true
 		for (const notification of matchingNotifications) {
 			try {
-				await sendSlackNotification(env, notification.message, notification.id);
+				await sendSlackNotification(env, notification);
 				await supabase.update('weekly_notifications', { id: notification.id }, { sent_this_week: true });
 				addLog(`✅ Marked notification ${notification.id} as sent_this_week=true`);
 			} catch (error) {

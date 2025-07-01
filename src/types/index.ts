@@ -8,6 +8,8 @@ export interface WeeklyNotification {
 	day_of_week: string;
 	time: string;
 	is_active: boolean;
+	sent_this_week: boolean;
+	branch_version?: string;
 	created_at: string;
 	updated_at: string;
 }
