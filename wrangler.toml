@@ -14,3 +14,4 @@ SUPABASE_URL = "https://buiqdlquecbemsjznpft.supabase.co"
 # Secrets (these are set via wrangler secret put command)
 # SUPABASE_SERVICE_ROLE_KEY = set via: wrangler secret put SUPABASE_SERVICE_ROLE_KEY
 # SLACK_WEBHOOK_URL = set via: wrangler secret put SLACK_WEBHOOK_URL
+# SLACK_WEBHOOK_URL_TEST = set via: wrangler secret put SLACK_WEBHOOK_URL_TEST

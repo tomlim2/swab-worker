@@ -10,6 +10,7 @@ export interface WeeklyNotification {
 	is_active: boolean;
 	sent_this_week: boolean;
 	branch_version?: string;
+	emoji_this_week?: string;
 	created_at: string;
 	updated_at: string;
 }
@@ -24,6 +25,7 @@ export interface Env {
 	SUPABASE_URL: string;
 	SUPABASE_SERVICE_ROLE_KEY: string;
 	SLACK_WEBHOOK_URL: string;
+	SLACK_WEBHOOK_URL_TEST: string;
 }
 
 export interface SupabaseResponse<T> {

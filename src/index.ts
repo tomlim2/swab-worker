@@ -38,8 +38,8 @@ export default {
 				if (notifications && notifications.length > 0) {
 					const notification = notifications[0];
 					console.log(`Force sending: ${notification.message}`);
-					await sendSlackNotification(env, notification);
-					return new Response(`Force sent: ${notification.message}`, { status: 200 });
+					await sendSlackNotification(env, notification, true); // Force use test webhook
+					return new Response(`Force sent to TEST channel: ${notification.message}`, { status: 200 });
 				} else {
 					return new Response('No active notifications found', { status: 404 });
 				}
