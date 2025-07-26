@@ -125,7 +125,18 @@ async function sendSlackNotification(env: Env, notification: WeeklyNotification)
   }
   
   try {
-    const message = `${notification.emoji_this_week} ${notification.message}`;
+    // Replace placeholders in the message
+    let message = notification.message;
+    
+    // Replace [emoji_this_week] with actual emoji
+    if (notification.emoji_this_week) {
+      message = message.replace(/\[emoji_this_week\]/g, notification.emoji_this_week);
+    }
+    
+    // Replace [branch_version] with actual branch version
+    if (notification.branch_version) {
+      message = message.replace(/\[branch_version\]/g, notification.branch_version);
+    }
     
     const response = await fetch(webhookUrl, {
       method: 'POST',
@@ -144,7 +155,7 @@ async function sendSlackNotification(env: Env, notification: WeeklyNotification)
       throw new Error(`HTTP ${response.status}: ${response.statusText} - ${errorText}`);
     }
     
-    console.log(`✅ Slack notification sent to ${env.ENVIRONMENT} environment: ${notification.message}`);
+    console.log(`✅ Slack notification sent to ${env.ENVIRONMENT} environment: ${message.substring(0, 100)}...`);
   } catch (error) {
     console.error(`❌ Failed to send Slack notification:`, error);
   }
