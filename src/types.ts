@@ -2,6 +2,7 @@ export interface Env {
   SUPABASE_URL: string;
   SUPABASE_SERVICE_ROLE_KEY: string;
   SLACK_WEBHOOK_URL_DEV: string;
+  SLACK_WEBHOOK_URL: string;
   ENVIRONMENT: string;
 }
 

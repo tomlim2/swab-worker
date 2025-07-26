@@ -7,7 +7,7 @@ A Cloudflare Worker that sends weekly Slack notifications using Supabase as the 
 - 🕐 **Scheduled Notifications**: Runs every 5 minutes to check for notifications
 - 📅 **Weekly Tracking**: Uses `sent_this_week` field to prevent duplicate sends
 - 🌏 **KST Timezone**: Handles Korean Standard Time (UTC+9)
-- 🔔 **Slack Integration**: Sends notifications via webhook
+- 🔔 **Slack Integration**: Sends notifications via webhook with environment-based URLs
 - ⏰ **Time Window**: Only sends within 5 minutes of scheduled time
 
 ## Setup
@@ -43,7 +43,9 @@ In the Cloudflare Dashboard:
 |----------|-------------|
 | `SUPABASE_URL` | Your Supabase project URL |
 | `SUPABASE_SERVICE_ROLE_KEY` | Your Supabase service role key |
-| `SLACK_WEBHOOK_URL_DEV` | Your Slack webhook URL |
+| `SLACK_WEBHOOK_URL_DEV` | Your Slack webhook URL for development |
+| `SLACK_WEBHOOK_URL` | Your Slack webhook URL for production |
+| `ENVIRONMENT` | Set to "development" or "production" |
 
 ### 5. Deploy
 
@@ -51,6 +53,15 @@ In the Cloudflare Dashboard:
 # Deploy to Cloudflare
 wrangler deploy
 ```
+
+## Environment Configuration
+
+The worker automatically chooses the correct Slack webhook URL based on the `ENVIRONMENT` variable:
+
+- **Development**: Uses `SLACK_WEBHOOK_URL_DEV`
+- **Production**: Uses `SLACK_WEBHOOK_URL`
+
+This allows you to send notifications to different Slack channels for testing and production.
 
 ## Database Schema
 
@@ -121,8 +132,9 @@ The `sent_this_week` field needs to be reset weekly. You can:
 2. **Time Check**: Gets current KST time and day of week
 3. **Database Query**: Finds active notifications for today that haven't been sent this week
 4. **Time Window**: Only processes notifications within 5 minutes of scheduled time
-5. **Slack Send**: Sends notification via webhook with emoji
-6. **Mark Sent**: Updates `sent_this_week` to `true`
+5. **Environment Check**: Chooses appropriate Slack webhook URL based on environment
+6. **Slack Send**: Sends notification via webhook with emoji
+7. **Mark Sent**: Updates `sent_this_week` to `true`
 
 ## Development
 
@@ -156,5 +168,6 @@ View worker logs in Cloudflare Dashboard:
 
 1. **No notifications sent**: Check if `sent_this_week` is `false`
 2. **Wrong timezone**: Worker uses KST (UTC+9)
-3. **Webhook errors**: Verify `SLACK_WEBHOOK_URL_DEV` is correct
-4. **Database errors**: Check Supabase credentials and table permissions 
+3. **Webhook errors**: Verify webhook URLs are correct for your environment
+4. **Database errors**: Check Supabase credentials and table permissions
+5. **Environment issues**: Ensure `ENVIRONMENT` variable is set correctly 

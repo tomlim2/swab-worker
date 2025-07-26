@@ -1,11 +1,3 @@
 name = "weekly-notification-worker"
 main = "src/index.ts"
-compatibility_date = "2024-01-01"
-
-# Cron trigger to run every 5 minutes
-[[triggers.crons]]
-schedule = "*/5 * * * *"
-
-# Environment variables (you'll set these in Cloudflare dashboard)
-[vars]
-ENVIRONMENT = "development" 
+compatibility_date = "2024-01-01" 
