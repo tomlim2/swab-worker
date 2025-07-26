@@ -1,17 +1,11 @@
-name = "weekly-slack-bot"
+name = "weekly-notification-worker"
 main = "src/index.ts"
 compatibility_date = "2024-01-01"
 
-[triggers]
-crons = [
-  "* * * * *"
-]
+# Cron trigger to run every 5 minutes
+[[triggers.crons]]
+schedule = "*/5 * * * *"
 
-# Environment variables
+# Environment variables (you'll set these in Cloudflare dashboard)
 [vars]
-SUPABASE_URL = "https://buiqdlquecbemsjznpft.supabase.co"
-
-# Secrets (these are set via wrangler secret put command)
-# SUPABASE_SERVICE_ROLE_KEY = set via: wrangler secret put SUPABASE_SERVICE_ROLE_KEY
-# SLACK_WEBHOOK_URL = set via: wrangler secret put SLACK_WEBHOOK_URL
-# SLACK_WEBHOOK_URL_TEST = set via: wrangler secret put SLACK_WEBHOOK_URL_TEST
+ENVIRONMENT = "development" 

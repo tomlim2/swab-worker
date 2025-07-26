@@ -1,15 +1,19 @@
 {
-	"name": "weekly-slack-bot",
-	"version": "0.0.0",
-	"private": true,
-	"scripts": {
-		"deploy": "wrangler deploy",
-		"dev": "wrangler dev",
-		"start": "wrangler dev",
-		"cf-typegen": "wrangler types"
-	},
-	"devDependencies": {
-		"typescript": "^5.5.2",
-		"wrangler": "^4.22.0"
-	}
+  "name": "weekly-notification-worker",
+  "version": "1.0.0",
+  "description": "Cloudflare Worker for weekly Slack notifications",
+  "main": "src/index.ts",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "deploy:dev": "wrangler deploy --env development",
+    "deploy:prod": "wrangler deploy --env production"
+  },
+  "dependencies": {
+    "@cloudflare/workers-types": "^4.20241106.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.0.0",
+    "wrangler": "^3.114.11"
+  }
 }
