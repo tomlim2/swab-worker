@@ -1,3 +1,13 @@
 name = "weekly-notification-worker"
 main = "src/index.ts"
-compatibility_date = "2024-01-01" 
+compatibility_date = "2024-01-01"
+
+[triggers]
+crons = [
+  "* * * * *"
+]
+
+# Environment variables (you'll set these in Cloudflare dashboard)
+[vars]
+ENVIRONMENT = "development" 
+SUPABASE_URL="https://buiqdlquecbemsjznpft.supabase.co"
